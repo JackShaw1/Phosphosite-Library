@@ -64,7 +64,6 @@ if __name__ == "__main__":
         total_num_phos += results[0]
         total_num_inter += results[1]
         contacts += results[2]
-        break
 
     print(f"Total number of p-THR and p-SER: {total_num_phos}")
     print(f"Total number of interfacial p-THR and p-SER: {total_num_inter}")
