@@ -9,10 +9,10 @@ import torch.nn.functional as F
     - Merges all features and outputs a single score for classification.
 """
 
-class PointNetBinaryClassifier(nn.Module):
+class three_dim_Classifier(nn.Module):
 
     def __init__(self, num_aa_types=20, num_atom_types=16, num_chain_ids=2, dropout_rate=0.2):
-        super(PointNetBinaryClassifier, self).__init__()
+        super(three_dim_Classifier, self).__init__()
 
         # embeddings
         self.aa_embedding = nn.Embedding(num_aa_types + 1, 16)  # Amino acid embedding (1-20)
