@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     predictome = os.listdir('high_spoc_predictome')
 
-    with open('giga_upregulator_oct_5.csv', 'r') as file:
+    with open('giga_upregulator_oct_5_no_histidines.csv', 'r') as file:
         reader = csv.reader(file)
         for row in reader:
             if row[4][0] in ['T', 'S']:
