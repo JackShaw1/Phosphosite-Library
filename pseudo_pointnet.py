@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class PointNetBinaryClassifier(nn.Module):
+    
     def __init__(self, num_aa_types=20, num_atom_types=16, num_chain_ids=2):
         super(PointNetBinaryClassifier, self).__init__()
 
@@ -30,13 +31,15 @@ class PointNetBinaryClassifier(nn.Module):
     def forward(self, x):
         batch_size, num_points, _ = x.shape
 
-        # Extract spatial (x, y, z) and categorical features
+        # Extract spatial features (continuous)
         xyz = x[:, :, :3].permute(0, 2, 1) 
+
+        # Extract chemical features (discrete categoricals encoded as integers)
         chain_id = self.chain_embedding(x[:, :, 3].long()).permute(0, 2, 1)  
         aa_type = self.aa_embedding(x[:, :, 4].long()).permute(0, 2, 1)  
         atom_type = self.atom_embedding(x[:, :, 5].long()).permute(0, 2, 1)  
 
-        # Concatenate spatial and categorical features
+        # Concatenate spatial and chemical features
         features = torch.cat([xyz, chain_id, aa_type, atom_type], dim=1)
 
         # Apply InstanceNorm1d only if num_points > 1
@@ -63,4 +66,3 @@ class PointNetBinaryClassifier(nn.Module):
         x = self.fc3(x)
         x = torch.sigmoid(x)
         return x.squeeze(1)
-
