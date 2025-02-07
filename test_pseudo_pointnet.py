@@ -26,28 +26,38 @@ model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
 model.eval() 
 model.to(device)
 
-acceptible_residues = [
-    'ARG', 'LYS', 'ASP', 'GLU', 'SEP', 'SER', 'TPO', 'THR'
+acceptable_residues = [
+    'ARG', 'LYS', 'ASP', 'GLU',
+    'ALA', 'CYS', 'GLN', 'GLY', 'HIS', 'ILE', 
+    'LEU', 'MET', 'PHE', 'PRO', 'SER', 'THR', 
+    'TRP', 'TYR', 'VAL', 'ASN', 'SEP', 'TPO'
 ]
 
-# acceptible_atoms_self = ['NE', 'NH1', 'NH2', 'OD1', 'OD2', 'ND2', 
-#                          'OE1', 'OE2', 'NE1', 'NE2', 'ND1', 
-#                          'NZ', 'OG', 'OG1', 'OH', 'CA']
+acceptable_residues_strict = [
+    'ARG', 'LYS', 'ASP', 'GLU',
+]
 
-acceptible_atoms = ['NE', 'NH1', 'NH2', 'OD1', 'OD2', 'ND2', 
-                    'OE1', 'OE2', 'NE1', 'NE2', 'ND1', 
-                    'NZ', 'OG', 'OG1', 'OH']
+acceptable_atoms = ['NZ', 'NE', 'NH1', 'NH2', 'OD1', 'OD2', 'OE1', 'OE2', 'CA']
 
-atom_mapping = {name: idx for idx, name in enumerate(acceptible_atoms)}
+atom_mapping = {name: idx for idx, name in enumerate(acceptable_atoms)}
 
-residue_mapping = {name: idx for idx, name in enumerate(acceptible_residues)}
+res_mapping = {name: idx for idx, name in enumerate(acceptable_residues)}
 
-# Encode residue and atom names
+residue_mapping = {
+    'ARG': 1, 'LYS': 2, 'ASP': 3, 'GLU': 4,
+    'ALA': 5, 'CYS': 6, 'GLN': 7, 'GLY': 8, 
+    'HIS': 9, 'ILE': 10, 'LEU': 11, 'MET': 12, 
+    'PHE': 13, 'PRO': 14, 'SER': 15, 'THR': 16, 
+    'TRP': 17, 'TYR': 18, 'VAL': 19, 'ASN': 20,
+    'SEP': 15, 'TPO': 16
+}
+
+# Encode names
 def encode_names(phos_id, bind_id, residue_name, atom_name):
-    return (0 if phos_id == bind_id else 1), residue_mapping.get(residue_name, 0), atom_mapping.get(atom_name, 0)
+    return (0 if phos_id == bind_id else 1), residue_mapping[residue_name], atom_mapping.get(atom_name, 0)
 
 # Generate point cloud
-def extract_residue_point_cloud(pdb_path, chain_id, residue_index, radius=10.0):
+def extract_residue_point_cloud(pdb_path, chain_id, residue_index):
     """Extracts atomic coordinates and feature encodings for a given residue."""
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("input_pdb", pdb_path)
@@ -70,32 +80,52 @@ def extract_residue_point_cloud(pdb_path, chain_id, residue_index, radius=10.0):
         raise ValueError(f"⚠️ Residue {residue_index} in chain {chain_id} not found or does not have the expected focal atom.")
 
     neighbor_search = NeighborSearch(list(structure.get_atoms()))
-    neighbors = neighbor_search.search(focal_atom.coord, radius)
+
+    neighbors_wide = neighbor_search.search(focal_atom.coord, 12)
+    neighbors_narrow = neighbor_search.search(focal_atom.coord, 6)
 
     point_cloud = []
 
-    for atom in neighbors:
-        if atom.get_parent().get_resname() in acceptible_residues and atom.get_name() in acceptible_atoms:
-            if atom.get_parent().get_resname() in ['SEP', 'SER', 'TPO', 'THR'] and \
-                    atom.get_parent().get_id()[1] != int(residue_index) and \
-                    atom.get_parent().get_parent().get_id() == chain_id or \
-                    atom.get_parent().get_resname() in ['SEP', 'SER', 'TPO', 'THR'] and \
-                    atom.get_parent().get_parent().get_id() != chain_id:
-                        continue
-            res_name = atom.get_parent().get_resname()
-            if res_name == 'SEP':
-                res_name = 'SER'
-            if res_name == 'TPO':
-                res_name = 'THR'
-            if res_name == 'PTR':
-                res_name = 'TYR'
-            atom_name = atom.get_name()
-            coord = (atom.coord - focal_atom.coord) / 10  # normalize coordinates
-            chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
-            point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
+    for atom in neighbors_wide:
+
+        # Handle side chain atoms
+        if atom.get_parent().get_resname() in acceptable_residues_strict and \
+            atom.get_name() in acceptable_atoms and atom.get_name() != 'CA' \
+                and atom.get_parent().get_parent().get_id() != chain_id:
+                res_name = atom.get_parent().get_resname()
+                atom_name = atom.get_name()
+                coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
+                chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
+                point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
+
+    for atom in neighbors_narrow:
+
+        # Handle side chain atoms
+        if atom.get_parent().get_resname() in acceptable_residues_strict and \
+            atom.get_name() in acceptable_atoms and atom.get_name() != 'CA' \
+                and atom.get_parent().get_parent().get_id() == chain_id:
+                    res_name = atom.get_parent().get_resname()
+                    atom_name = atom.get_name()
+                    coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
+                    chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
+                    point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
+
+    for chain in model:
+        if chain.get_id() == chain_id:
+            for residue in chain:
+                if atom.get_parent().get_resname() in acceptable_residues and \
+                    abs(atom.get_parent().get_id()[1] - residue_index) <= 10:
+                        for atom in residue:
+                            if atom.get_name() == 'CA':
+                                res_name = atom.get_parent().get_resname()
+                                atom_name = atom.get_name()
+                                coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
+                                chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
+                                point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
+            
 
     if not point_cloud:
-        raise ValueError(f"⚠️ No neighbors found within {radius} Å for residue {residue_index} in chain {chain_id}.")
+        raise ValueError(f"⚠️ No neighbors found within 12 Å for residue {residue_index} in chain {chain_id}.")
 
     return np.array(point_cloud, dtype=np.float32)
 
