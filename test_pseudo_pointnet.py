@@ -27,18 +27,12 @@ model.eval()
 model.to(device)
 
 acceptible_residues = [
-    'ARG', 'ASP', 'GLU', 'LYS', 'SEP', 'SER', 'TPO', 'THR'
+    'ARG', 'LYS', 'ASP', 'GLU', 'SEP', 'SER', 'TPO', 'THR'
 ]
 
-acceptible_residues_self = [
-    'ARG', 'ASP', 'GLU', 'LYS', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 
-    'ILE', 'LEU', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 
-    'TYR', 'VAL'
-]
-
-acceptible_atoms_self = ['NE', 'NH1', 'NH2', 'OD1', 'OD2', 'ND2', 
-                         'OE1', 'OE2', 'NE1', 'NE2', 'ND1', 
-                         'NZ', 'OG', 'OG1', 'OH', 'CA']
+# acceptible_atoms_self = ['NE', 'NH1', 'NH2', 'OD1', 'OD2', 'ND2', 
+#                          'OE1', 'OE2', 'NE1', 'NE2', 'ND1', 
+#                          'NZ', 'OG', 'OG1', 'OH', 'CA']
 
 acceptible_atoms = ['NE', 'NH1', 'NH2', 'OD1', 'OD2', 'ND2', 
                     'OE1', 'OE2', 'NE1', 'NE2', 'ND1', 
@@ -46,7 +40,7 @@ acceptible_atoms = ['NE', 'NH1', 'NH2', 'OD1', 'OD2', 'ND2',
 
 atom_mapping = {name: idx for idx, name in enumerate(acceptible_atoms)}
 
-residue_mapping = {name: idx for idx, name in enumerate(acceptible_residues_self)}
+residue_mapping = {name: idx for idx, name in enumerate(acceptible_residues)}
 
 # Encode residue and atom names
 def encode_names(phos_id, bind_id, residue_name, atom_name):
@@ -82,8 +76,12 @@ def extract_residue_point_cloud(pdb_path, chain_id, residue_index, radius=10.0):
 
     for atom in neighbors:
         if atom.get_parent().get_resname() in acceptible_residues and atom.get_name() in acceptible_atoms:
-            if atom.get_parent().get_resname() in ['SEP', 'SER', 'TPO', 'THR'] and atom.get_parent().get_id()[1] != int(residue_index):
-                continue
+            if atom.get_parent().get_resname() in ['SEP', 'SER', 'TPO', 'THR'] and \
+                    atom.get_parent().get_id()[1] != int(residue_index) and \
+                    atom.get_parent().get_parent().get_id() == chain_id or \
+                    atom.get_parent().get_resname() in ['SEP', 'SER', 'TPO', 'THR'] and \
+                    atom.get_parent().get_parent().get_id() != chain_id:
+                        continue
             res_name = atom.get_parent().get_resname()
             if res_name == 'SEP':
                 res_name = 'SER'
