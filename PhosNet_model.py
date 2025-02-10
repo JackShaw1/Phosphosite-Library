@@ -2,17 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class PointNetBinaryClassifier(nn.Module):
+class PhosNetBinaryClassifier(nn.Module):
     
-    def __init__(self, num_aa_types=20, num_atom_types=3, num_chain_ids=2):  # Changed num_atom_types back to 16
-        super(PointNetBinaryClassifier, self).__init__()
+    def __init__(self, num_aa_types=20):  # Changed num_atom_types back to 16
+        super(PhosNetBinaryClassifier, self).__init__()
 
-        # Embedding layers
-        self.aa_embedding = nn.Embedding(num_aa_types + 1, 3)  
-        self.atom_embedding = nn.Embedding(num_atom_types + 1, 3)  
-        self.chain_embedding = nn.Embedding(num_chain_ids + 1, 1)
+        # Embedding for amino acid type
+        self.aa_embedding = nn.Embedding(num_aa_types, 3)  
 
-        # PointNet feature extractor (1D Convolutions + InstanceNorm)
+        # 1D convolutions
         self.conv1 = nn.Conv1d(10, 20, 1)
         self.conv2 = nn.Conv1d(20, 40, 1)
         self.conv3 = nn.Conv1d(40, 80, 1)
@@ -23,7 +21,7 @@ class PointNetBinaryClassifier(nn.Module):
 
         # Fully connected layers
         self.fc1 = nn.Linear(80, 160)
-        self.fc2 = nn.Linear(160, 80)  # Increased from 20 → 80 to prevent bottleneck
+        self.fc2 = nn.Linear(160, 80)
         self.fc3 = nn.Linear(80, 1)
 
         self.dropout = nn.Dropout(0.2)
@@ -37,7 +35,7 @@ class PointNetBinaryClassifier(nn.Module):
         # Extract chemical features (discrete categoricals encoded as integers)
         chain_id = x[:, :, 3].unsqueeze(1).float()
         aa_type = self.aa_embedding(x[:, :, 4].long()).permute(0, 2, 1)  
-        atom_type = self.atom_embedding(x[:, :, 5].long()).permute(0, 2, 1)  
+        atom_type = F.one_hot(x[:, :, 5].long(), num_classes=3).permute(0, 2, 1).float()  
 
         # Concatenate spatial and chemical features
         features = torch.cat([xyz, chain_id, aa_type, atom_type], dim=1)
