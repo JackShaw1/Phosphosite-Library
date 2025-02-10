@@ -11,46 +11,49 @@ from sep_tpo_PDB_dataset import PDBDataset
 from transformations import PointCloudTransform
 from pseudo_pointnet import PointNetBinaryClassifier
 
-pdb_folder = 'pdb_structures_sep_tpo'
+pdb_folder_true = 'pdb_structures_sep_tpo'
+pdb_folder_false = 'negatives_unzipped'
 true_csv = 'norep_positives_ungrouped_fold_job_jan_25.csv'
-false_csv = 'sampled_negatives_jan_25.csv'
+false_csv = 'negatives_feb_9.csv'
 
 # params
-epochs = 4
-batch_size = 1
+epochs = 8
+batch_size = 4
 learning_rate = 0.0001
 
 # Create dataset and split into train/test
-full_dataset = PDBDataset(pdb_folder, true_csv, false_csv)
+full_dataset = PDBDataset(pdb_folder_true, pdb_folder_false, true_csv, false_csv)
 indices = list(range(len(full_dataset)))
 train_indices, test_indices = train_test_split(indices, test_size=0.2, random_state=42)
 
-train_transform = PointCloudTransform(rotation=True, wiggle=True)
-train_dataset = Subset(PDBDataset(pdb_folder, true_csv, false_csv, transform=train_transform), train_indices)
-test_dataset = Subset(PDBDataset(pdb_folder, true_csv, false_csv), test_indices)
+train_transform = PointCloudTransform(rotation=True, wiggle=True, reflection=True)
+train_dataset = Subset(PDBDataset(pdb_folder_true, pdb_folder_false, true_csv, false_csv, transform=train_transform), train_indices)
+test_dataset = Subset(PDBDataset(pdb_folder_true, pdb_folder_false, true_csv, false_csv), test_indices)
 
 def custom_collate(batch):
+
+    # Remove None samples
     batch = [sample for sample in batch if sample is not None]
-    if len(batch) == 0:
-        raise ValueError("All samples in the batch are invalid.")
+
     max_len = max(len(sample['coordinates']) for sample in batch)
     
     padded_coords = []
     labels = []
     filenames = []
-    
+
     for sample in batch:
         coords = sample['coordinates']
         label = sample['label']
         coord_padding = np.zeros((max_len - len(coords), coords.shape[1]))
         padded_coords.append(torch.tensor(np.vstack((coords, coord_padding)), dtype=torch.float32))
-        labels.append(torch.tensor(label, dtype=torch.float32))  # 🔹 Change label to float for BCEWithLogitsLoss
+        labels.append(torch.tensor(label, dtype=torch.float32))  # Ensure float dtype for BCEWithLogitsLoss
         filenames.append(sample['filename'])
-    
+
     coords_batch = torch.stack(padded_coords)
     labels_batch = torch.stack(labels)
-    
+
     return {'coordinates': coords_batch, 'labels': labels_batch, 'filename': filenames}
+
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=custom_collate)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
