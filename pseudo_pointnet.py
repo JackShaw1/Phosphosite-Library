@@ -29,13 +29,13 @@ class PointNetBinaryClassifier(nn.Module):
         self.dropout = nn.Dropout(0.2)
 
     def forward(self, x):
-        batch_size, num_points, _ = x.shape
+        batch_size, num_points, num_features = x.shape
 
         # Extract spatial features (continuous)
         xyz = x[:, :, :3].permute(0, 2, 1) 
 
         # Extract chemical features (discrete categoricals encoded as integers)
-        chain_id = self.chain_embedding(x[:, :, 3].long()).permute(0, 2, 1)  
+        chain_id = x[:, :, 3].unsqueeze(1).float()
         aa_type = self.aa_embedding(x[:, :, 4].long()).permute(0, 2, 1)  
         atom_type = self.atom_embedding(x[:, :, 5].long()).permute(0, 2, 1)  
 
