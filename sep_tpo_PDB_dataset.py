@@ -66,18 +66,19 @@ class PDBDataset(Dataset):
             structure = parser.get_structure(pdb_code, f"{pdb_path}")
 
         focal_atom = None
-        model = structure[0] 
-        for chain in model:
-            if chain.get_id() == chain_id:
-                for residue in chain:
-                    if residue.get_id()[1] == int(residue_index):
-                        for atom in residue:
-                            if residue.get_resname() in ['SEP', 'SER'] and atom.get_name() == 'OG':
-                                focal_atom = atom
-                            if residue.get_resname() in ['TPO', 'THR'] and atom.get_name() == 'OG1':
-                                focal_atom = atom
-                            if residue.get_resname() in ['PTR', 'TYR'] and atom.get_name() == 'OH':
-                                focal_atom = atom
+        for model in structure:
+            for chain in model:
+                if chain.get_id() == chain_id:
+                    for residue in chain:
+                        if residue.get_id()[1] == int(residue_index):
+                            for atom in residue:
+                                if residue.get_resname() in ['SEP', 'SER'] and atom.get_name() == 'OG':
+                                    focal_atom = atom
+                                if residue.get_resname() in ['TPO', 'THR'] and atom.get_name() == 'OG1':
+                                    focal_atom = atom
+                                if residue.get_resname() in ['PTR', 'TYR'] and atom.get_name() == 'OH':
+                                    focal_atom = atom
+            break
 
         if focal_atom is None:
             return None
@@ -113,19 +114,20 @@ class PDBDataset(Dataset):
                         chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
                         point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
 
-        for chain in model:
-            if chain.get_id() == chain_id:
-                for residue in chain:
-                    if atom.get_parent().get_resname() in acceptable_residues and \
-                        abs(atom.get_parent().get_id()[1] - residue_index) <= 10:
-                            for atom in residue:
-                                if atom.get_name() == 'CA':
-                                    res_name = residue.get_resname()
-                                    atom_name = atom.get_name()
-                                    coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
-                                    chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
-                                    point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
-                
+        for model in structure:
+            for chain in model:
+                if chain.get_id() == chain_id:
+                    for residue in chain:
+                        if residue.get_resname() in acceptable_residues and \
+                            abs(residue.get_id()[1] - int(residue_index)) <= 10:
+                                for atom in residue:
+                                    if atom.get_name() == 'CA':
+                                        res_name = residue.get_resname()
+                                        atom_name = atom.get_name()
+                                        coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
+                                        chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
+                                        point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
+            break
 
         if not point_cloud:
             return None
