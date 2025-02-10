@@ -19,10 +19,6 @@ acceptable_residues_strict = [
 
 acceptable_atoms = ['NZ', 'NE', 'NH1', 'NH2', 'OD1', 'OD2', 'OE1', 'OE2', 'CA']
 
-atom_mapping = {name: idx for idx, name in enumerate(acceptable_atoms)}
-
-res_mapping = {name: idx for idx, name in enumerate(acceptable_residues)}
-
 residue_mapping = {
     'ARG': 1, 'LYS': 2, 'ASP': 3, 'GLU': 4,
     'ALA': 5, 'CYS': 6, 'GLN': 7, 'GLY': 8, 
@@ -32,34 +28,42 @@ residue_mapping = {
     'SEP': 15, 'TPO': 16
 }
 
+atom_mapping = {
+    'NZ': 1, 'NE': 1, 'NH1': 1, 'NH2': 1, 'OD1': 2, 'OD2': 2, 'OE1': 2, 'OE2': 2, 'CA': 3
+}
+
 # Encode names
 def encode_names(phos_id, bind_id, residue_name, atom_name):
-    return (0 if phos_id == bind_id else 1), residue_mapping[residue_name], atom_mapping.get(atom_name, 0)
+    return float((0 if phos_id == bind_id else 1)), float(residue_mapping[residue_name]), float(atom_mapping[atom_name])
 
 class PDBDataset(Dataset):
-    def __init__(self, pdb_folder, true_csv, false_csv, transform=None):
-        self.pdb_folder = pdb_folder
+    def __init__(self, true_pdb_folder, false_pdb_folder, true_csv, false_csv, transform=None):
+        self.true_pdb_folder = true_pdb_folder
+        self.false_pdb_folder = false_pdb_folder
         self.transform = transform
         self.samples = []
-        self._load_csv(true_csv, label=1)
-        self._load_csv(false_csv, label=0)
+        self._load_csv(true_csv, label=1, pdb_folder=true_pdb_folder)
+        self._load_csv(false_csv, label=0, pdb_folder=false_pdb_folder)
 
-    def _load_csv(self, csv_path, label):
+    def _load_csv(self, csv_path, label, pdb_folder):
         with open(csv_path, 'r') as file:
             reader = csv.reader(file)
             next(reader)  # Skip header if present
             for row in reader:
                 filename, chain, residue_index = row[0], row[1], int(row[2])
-                self.samples.append((filename, chain, residue_index, label))
+                self.samples.append((filename, chain, residue_index, label, pdb_folder))
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        pdb_code, chain_id, residue_index, label = self.samples[idx]
-        pdb_path = os.path.join(self.pdb_folder, pdb_code)
+        pdb_code, chain_id, residue_index, label, pdb_folder = self.samples[idx]
+        pdb_path = os.path.join(pdb_folder, pdb_code)
         parser = PDBParser(QUIET=True)
-        structure = parser.get_structure(pdb_code, f"{pdb_path}.pdb")
+        if label == 1:
+            structure = parser.get_structure(pdb_code, f"{pdb_path}.pdb")
+        if label == 0:
+            structure = parser.get_structure(pdb_code, f"{pdb_path}")
 
         focal_atom = None
         model = structure[0] 
@@ -116,7 +120,7 @@ class PDBDataset(Dataset):
                         abs(atom.get_parent().get_id()[1] - residue_index) <= 10:
                             for atom in residue:
                                 if atom.get_name() == 'CA':
-                                    res_name = atom.get_parent().get_resname()
+                                    res_name = residue.get_resname()
                                     atom_name = atom.get_name()
                                     coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
                                     chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
