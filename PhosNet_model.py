@@ -37,36 +37,39 @@ class PhosNetBinaryClassifier(nn.Module):
 
         # Extract chain id, amino acid type, and atom element for atom
         chain_id = F.one_hot(x[:, :, 3].long(), num_classes=2).float()
-        aa_type = self.aa_embedding(x[:, :, 4].long())
+        aa_type = self.aa_embedding(x[:, :, 4].long()) 
         atom_type = F.one_hot(x[:, :, 5].long(), num_classes=3).float()
 
         # Concatenate spatial and chemical features
-        features = torch.cat([xyz, chain_id, aa_type, atom_type], dim=1)
+        features = torch.cat([xyz, chain_id, aa_type, atom_type], dim=2).permute([0, 2, 1])
 
-        # Apply InstanceNorm1d only if num_points > 1
+        # Layer 1
         features = self.conv1(features)
-        if num_points > 1:
-            features = self.bn1(features)
+        features = self.bn1(features)
         features = F.relu(features)
 
+        # Layer 2
         features = self.conv2(features)
-        if num_points > 1:
-            features = self.bn2(features)
+        features = self.bn2(features)
         features = F.relu(features)
 
+        # Layer 3
         features = self.conv3(features)
-        if num_points > 1:
-            features = self.bn3(features)
+        features = self.bn3(features)
 
-        # Global max pooling
-        features = torch.max(features, 2, keepdim=False)[0]
+        # **Flatten Instead of Pooling**
+        features = features.view(batch_size, -1)  # Shape: (batch_size, 144 * num_points)
+
+        # Adjust input size of `fc1`
+        self.fc1 = nn.Linear(144 * num_points, 288).to(x.device)  # Ensure correct input size
+
 
         # Fully connected layers
-        x = F.relu(self.fc1(features))
-        x = self.dropout(F.relu(self.fc2(x)))
-        x = self.fc3(x)
+        connected_features = F.relu(self.fc1(features))
+        connected_features = self.dropout(F.relu(self.fc2(connected_features)))
+        connected_features = self.fc3(connected_features)
 
         # Remove sigmoid if using BCEWithLogitsLoss
-        x = torch.sigmoid(x)  
+        output = torch.sigmoid(connected_features)  
         
-        return x.squeeze(1)
+        return output.squeeze(1)
