@@ -9,7 +9,7 @@ from tqdm import tqdm
 import csv
 from sep_tpo_PDB_dataset import PDBDataset
 from transformations import PointCloudTransform
-from pseudo_pointnet import PointNetBinaryClassifier
+from PhosNet_model import PhosNetBinaryClassifier
 
 pdb_folder_true = 'pdb_structures_sep_tpo'
 pdb_folder_false = 'negatives_unzipped'
@@ -17,9 +17,9 @@ true_csv = 'norep_positives_ungrouped_fold_job_jan_25.csv'
 false_csv = 'negatives_feb_9.csv'
 
 # params
-epochs = 8
+epochs = 10
 batch_size = 4
-learning_rate = 0.0001
+learning_rate = 0.00001
 
 # Create dataset and split into train/test
 full_dataset = PDBDataset(pdb_folder_true, pdb_folder_false, true_csv, false_csv)
@@ -35,7 +35,7 @@ def custom_collate(batch):
     # Remove None samples
     batch = [sample for sample in batch if sample is not None]
 
-    max_len = max(len(sample['coordinates']) for sample in batch)
+    max_len = 20
     
     padded_coords = []
     labels = []
@@ -59,7 +59,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, co
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
 
 # get model
-model = PointNetBinaryClassifier()
+model = PhosNetBinaryClassifier()
 
 # Binary Cross-Entropy Loss
 criterion = nn.BCELoss()
