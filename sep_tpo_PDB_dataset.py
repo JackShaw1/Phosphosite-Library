@@ -20,21 +20,21 @@ acceptable_residues_strict = [
 acceptable_atoms = ['NZ', 'NE', 'NH1', 'NH2', 'OD1', 'OD2', 'OE1', 'OE2', 'CA']
 
 residue_mapping = {
-    'ARG': 1, 'LYS': 2, 'ASP': 3, 'GLU': 4,
-    'ALA': 5, 'CYS': 6, 'GLN': 7, 'GLY': 8, 
-    'HIS': 9, 'ILE': 10, 'LEU': 11, 'MET': 12, 
-    'PHE': 13, 'PRO': 14, 'SER': 15, 'THR': 16, 
-    'TRP': 17, 'TYR': 18, 'VAL': 19, 'ASN': 20,
-    'SEP': 15, 'TPO': 16
+    'ARG': 0, 'LYS': 1, 'ASP': 2, 'GLU': 3,
+    'ALA': 4, 'CYS': 5, 'GLN': 6, 'GLY': 7, 
+    'HIS': 8, 'ILE': 9, 'LEU': 10, 'MET': 11, 
+    'PHE': 12, 'PRO': 13, 'SER': 14, 'THR': 15, 
+    'TRP': 16, 'TYR': 17, 'VAL': 18, 'ASN': 19,
+    'SEP': 14, 'TPO': 15
 }
 
 atom_mapping = {
-    'NZ': 1, 'NE': 1, 'NH1': 1, 'NH2': 1, 'OD1': 2, 'OD2': 2, 'OE1': 2, 'OE2': 2, 'CA': 3
+    'NZ': 0, 'NE': 0, 'NH1': 0, 'NH2': 0, 'OD1': 1, 'OD2': 1, 'OE1': 1, 'OE2': 1, 'CA': 2
 }
 
 # Encode names
 def encode_names(phos_id, bind_id, residue_name, atom_name):
-    return float((0 if phos_id == bind_id else 1)), float(residue_mapping[residue_name]), float(atom_mapping[atom_name])
+    return (0 if phos_id == bind_id else 1), residue_mapping[residue_name], atom_mapping[atom_name]
 
 class PDBDataset(Dataset):
     def __init__(self, true_pdb_folder, false_pdb_folder, true_csv, false_csv, transform=None):
@@ -114,23 +114,28 @@ class PDBDataset(Dataset):
                         chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
                         point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
 
-        for model in structure:
-            for chain in model:
-                if chain.get_id() == chain_id:
-                    for residue in chain:
-                        if residue.get_resname() in acceptable_residues and \
-                            abs(residue.get_id()[1] - int(residue_index)) <= 10:
-                                for atom in residue:
-                                    if atom.get_name() == 'CA':
-                                        res_name = residue.get_resname()
-                                        atom_name = atom.get_name()
-                                        coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
-                                        chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
-                                        point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
-            break
+        # for model in structure:
+        #     for chain in model:
+        #         if chain.get_id() == chain_id:
+        #             for residue in chain:
+        #                 if residue.get_resname() in acceptable_residues and \
+        #                     abs(residue.get_id()[1] - int(residue_index)) <= 10:
+        #                         for atom in residue:
+        #                             if atom.get_name() == 'CA':
+        #                                 res_name = residue.get_resname()
+        #                                 atom_name = atom.get_name()
+        #                                 coord = (atom.coord - focal_atom.coord) / 12  # normalize coordinates
+        #                                 chain_encoded, res_encoded, atom_encoded = encode_names(chain.get_id(), atom.get_parent().get_parent().get_id(), res_name, atom_name)
+        #                                 point_cloud.append(np.concatenate((coord, [chain_encoded, res_encoded, atom_encoded])))
+        #     break
 
         if not point_cloud:
             return None
+        
+        point_cloud.sort(key=lambda x: np.linalg.norm(x[:3]))  # Sort by Euclidean distance
+
+        if len(point_cloud) > 20:
+            point_cloud = point_cloud[:20]
 
         sample = {'coordinates': np.array(point_cloud, dtype=np.float32), 'label': label, 'filename': pdb_code}
         if self.transform:
