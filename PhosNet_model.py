@@ -4,8 +4,10 @@ import torch.nn.functional as F
 
 class PhosNetBinaryClassifier(nn.Module):
     
-    def __init__(self, num_aa_types=20):  # Changed num_atom_types back to 16
+    def __init__(self, num_aa_types=20, max_len=20):  
         super(PhosNetBinaryClassifier, self).__init__()
+
+        self.max_len = max_len  # Store max_len for reference
 
         # Embedding for amino acid type
         self.aa_embedding = nn.Embedding(num_aa_types, 4)  
@@ -19,17 +21,15 @@ class PhosNetBinaryClassifier(nn.Module):
         self.bn2 = nn.InstanceNorm1d(72, affine=True)
         self.bn3 = nn.InstanceNorm1d(144, affine=True)
 
-        # Fully connected layers
-        self.fc1 = nn.Linear(144, 288)
+        # **Fix input size based on max_len**
+        fc_input_size = 144 * max_len  # Ensure consistency with expected input shape
+        self.fc1 = nn.Linear(fc_input_size, 288)
         self.fc2 = nn.Linear(288, 144)
         self.fc3 = nn.Linear(144, 1)
         
         self.dropout = nn.Dropout(0.2)
 
-
-
     def forward(self, x):
-
         batch_size, num_points, num_features = x.shape
 
         # Extract atom coordinates
@@ -57,12 +57,8 @@ class PhosNetBinaryClassifier(nn.Module):
         features = self.conv3(features)
         features = self.bn3(features)
 
-        # **Flatten Instead of Pooling**
-        features = features.view(batch_size, -1)  # Shape: (batch_size, 144 * num_points)
-
-        # Adjust input size of `fc1`
-        self.fc1 = nn.Linear(144 * num_points, 288).to(x.device)  # Ensure correct input size
-
+        # Flatten to match fc1's expected input size
+        features = features.view(batch_size, -1)  # Shape: (batch_size, 144 * max_len)
 
         # Fully connected layers
         connected_features = F.relu(self.fc1(features))
